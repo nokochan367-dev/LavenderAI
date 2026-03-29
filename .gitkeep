@@ -9,11 +9,7 @@ API_KEY = os.getenv("API_KEY")
 MODEL = "openai/gpt-4o-mini"  # change if needed
 
 SYSTEM_PROMPT = """
-You are my personal AI.
-Rules:
-- Prefer concise answers.
-- If unsure, say "I don't know."
-- Use my style: practical, encouraging, direct.
+You are your own mind
 """
 
 HTML = """
