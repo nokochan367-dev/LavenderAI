@@ -1,0 +1,109 @@
+from flask import Flask, request, jsonify, render_template_string
+import requests
+import os
+
+app = Flask(__name__)
+
+# Use any chat API key you have (OpenRouter, etc.)
+API_KEY = os.getenv("API_KEY")
+MODEL = "openai/gpt-4o-mini"  # change if needed
+
+SYSTEM_PROMPT = """
+You are my personal AI.
+Rules:
+- Prefer concise answers.
+- If unsure, say "I don't know."
+- Use my style: practical, encouraging, direct.
+"""
+
+HTML = """
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My AI</title>
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+    #chat { white-space: pre-wrap; border: 1px solid #ccc; padding: 10px; min-height: 200px; }
+    button, input { font-size: 16px; margin-top: 8px; }
+    input { width: 100%; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h3>My AI (Voice + Text)</h3>
+  <div id="chat"></div>
+  <input id="msg" placeholder="Type here..." />
+  <button onclick="send()">Send</button>
+  <button onclick="startVoice()">🎤 Speak</button>
+
+<script>
+const chat = document.getElementById('chat');
+const msg = document.getElementById('msg');
+
+function addLine(role, text){
+  chat.textContent += `${role}: ${text}\\n\\n`;
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function send(){
+  const text = msg.value.trim();
+  if(!text) return;
+  addLine("You", text);
+  msg.value = "";
+
+  const res = await fetch('/chat', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({message:text})
+  });
+  const data = await res.json();
+  addLine("AI", data.reply);
+
+  // Text-to-speech
+  const u = new SpeechSynthesisUtterance(data.reply);
+  speechSynthesis.speak(u);
+}
+
+function startVoice(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ alert("Speech recognition not supported in this browser."); return; }
+  const rec = new SR();
+  rec.lang = "en-US";
+  rec.onresult = (e)=> {
+    msg.value = e.results[0][0].transcript;
+    send();
+  };
+  rec.start();
+}
+</script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    return render_template_string(HTML)
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_msg = request.json.get("message", "")
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role":"system","content": SYSTEM_PROMPT},
+            {"role":"user","content": user_msg}
+        ]
+    }
+
+    r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
+    r.raise_for_status()
+    reply = r.json()["choices"][0]["message"]["content"]
+    return jsonify({"reply": reply})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=3000, debug=True)
